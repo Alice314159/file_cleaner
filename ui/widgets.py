@@ -82,3 +82,46 @@ class FlatButton(tk.Label):
     def _on_click(self, _event):
         if self.enabled and self.command:
             self.command()
+
+
+class Tooltip:
+    def __init__(self, widget, wraplength=620):
+        self.widget = widget
+        self.wraplength = wraplength
+        self.tip = None
+        self.text = ""
+
+    def show(self, text: str, x: int, y: int):
+        if not text:
+            self.hide()
+            return
+
+        if self.tip is None:
+            self.tip = tk.Toplevel(self.widget)
+            self.tip.wm_overrideredirect(True)
+            self.label = tk.Label(
+                self.tip,
+                bg=COLORS["card"],
+                fg=COLORS["text"],
+                text=text,
+                justify="left",
+                relief="solid",
+                borderwidth=1,
+                padx=8,
+                pady=5,
+                wraplength=self.wraplength,
+                font=("Menlo", 10),
+            )
+            self.label.pack()
+        elif text != self.text:
+            self.label.config(text=text)
+
+        self.text = text
+        self.tip.wm_geometry(f"+{x}+{y}")
+        self.tip.deiconify()
+        self.tip.lift()
+
+    def hide(self):
+        self.text = ""
+        if self.tip is not None:
+            self.tip.withdraw()

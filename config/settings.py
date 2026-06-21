@@ -4,6 +4,16 @@ from pathlib import Path
 CONFIG_FILE = Path.home() / ".file_cleaner_config.json"
 FAST_SCAN_MODE = True
 
+DEFAULT_EXCLUDE_PATTERNS = [
+    ".venv",
+    "venv",
+    "env",
+    "ENV",
+    "virtualenv",
+    ".tox",
+    ".nox",
+]
+
 DEFAULT_TARGETS = [
     {"id": "pycache",      "type": "folder", "pattern": "__pycache__",   "enabled": True,  "builtin": True, "match_mode": "exact"},
     {"id": "pytest_cache", "type": "folder", "pattern": ".pytest_cache", "enabled": True,  "builtin": True, "match_mode": "exact"},
@@ -18,6 +28,7 @@ DEFAULT_TARGETS = [
     {"id": "pyd",          "type": "ext",    "pattern": ".pyd",          "enabled": False, "builtin": True, "match_mode": "exact"},
     {"id": "log",          "type": "ext",    "pattern": ".log",          "enabled": False, "builtin": True, "match_mode": "exact"},
     {"id": "tmp",          "type": "ext",    "pattern": ".tmp",          "enabled": False, "builtin": True, "match_mode": "exact"},
+    {"id": "coverage_file", "type": "file",   "pattern": ".coverage",    "enabled": True,  "builtin": True, "match_mode": "exact"},
     {"id": "ds_store",     "type": "file",   "pattern": ".DS_Store",     "enabled": True,  "builtin": True, "match_mode": "exact"},
     {"id": "thumbs_db",    "type": "file",   "pattern": "Thumbs.db",     "enabled": True,  "builtin": True, "match_mode": "exact"},
 ]

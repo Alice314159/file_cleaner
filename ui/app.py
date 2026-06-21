@@ -14,10 +14,11 @@ from config.manager import (
 )
 from config.settings import COLORS, CONFIG_FILE, DANGEROUS_FOLDER_PATTERNS
 from core.deleter import delete_item
+from core.matcher import should_exclude
 from services.import_export import read_rules, write_rules
 from services.path_history import save_recent_path
 from ui.left_panel import target_risk
-from ui.widgets import FlatButton
+from ui.widgets import FlatButton, Tooltip
 from utils.formatters import fmt_modified, fmt_size
 from utils.logger import LOG_FILE, LOGGER
 from workers.scan_worker import ScanWorker
@@ -236,21 +237,53 @@ class FileCleanerApp(tk.Tk):
         sep = tk.Frame(parent, bg=COLORS["border"], height=1)
         sep.pack(fill="x", padx=18, pady=16)
 
-        # Targets section
-        targets_head = tk.Frame(parent, bg=COLORS["panel"])
+        tab_bar = tk.Frame(parent, bg=COLORS["panel"])
+        tab_bar.pack(fill="x", padx=18, pady=(0, 10))
+        self.left_tab_buttons = {}
+        self.clean_tab_btn = self._btn(
+            tab_bar,
+            "Clean Targets",
+            lambda: self._show_left_tab("clean"),
+            bg=COLORS["accent"],
+            fg="white",
+            padx=10,
+        )
+        self.clean_tab_btn.pack(side="left", fill="x", expand=True)
+        self.exclude_tab_btn = self._btn(
+            tab_bar,
+            "Exclude Targets",
+            lambda: self._show_left_tab("exclude"),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            padx=10,
+        )
+        self.exclude_tab_btn.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self.left_tab_buttons["clean"] = self.clean_tab_btn
+        self.left_tab_buttons["exclude"] = self.exclude_tab_btn
+
+        self.left_pages = tk.Frame(parent, bg=COLORS["panel"])
+        self.left_pages.pack(fill="both", expand=True)
+        self.left_pages.grid_rowconfigure(0, weight=1)
+        self.left_pages.grid_columnconfigure(0, weight=1)
+        self.clean_targets_page = tk.Frame(self.left_pages, bg=COLORS["panel"])
+        self.exclude_targets_page = tk.Frame(self.left_pages, bg=COLORS["panel"])
+        self.clean_targets_page.grid(row=0, column=0, sticky="nsew")
+        self.exclude_targets_page.grid(row=0, column=0, sticky="nsew")
+        self._active_left_tab = None
+
+        # Clean targets page
+        targets_head = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
         targets_head.pack(fill="x", padx=18, pady=(0, 8))
         tk.Label(targets_head, text="CLEAN TARGETS", bg=COLORS["panel"],
                  fg=COLORS["text_muted"], font=("Helvetica", 10, "bold")).pack(side="left")
-        enabled = sum(1 for t in self.config_data["targets"] if t["enabled"])
-        total = len(self.config_data["targets"])
-        self.targets_count_var = tk.StringVar(value=f"{enabled}/{total} enabled")
+        self.targets_count_var = tk.StringVar(value=self._target_count_text())
         add_target_btn = self._btn(targets_head, "+ Add", self._open_add_target_dialog,
                                    bg=COLORS["success"], fg="white", padx=9)
         add_target_btn.pack(side="right", padx=(8, 0))
         tk.Label(targets_head, textvariable=self.targets_count_var, bg=COLORS["panel"],
                  fg=COLORS["text_muted"], font=("Helvetica", 10)).pack(side="right", padx=(0, 8))
 
-        target_tools = tk.Frame(parent, bg=COLORS["panel"])
+        target_tools = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
         target_tools.pack(fill="x", padx=18, pady=(0, 8))
 
         self.target_filter_var = tk.StringVar()
@@ -272,8 +305,10 @@ class FileCleanerApp(tk.Tk):
         disable_all_btn.pack(side="left", padx=(6, 0))
 
         # Scrollable targets list
-        canvas = tk.Canvas(parent, bg=COLORS["panel"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        targets_list_wrap = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
+        targets_list_wrap.pack(fill="both", expand=True)
+        canvas = tk.Canvas(targets_list_wrap, bg=COLORS["panel"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(targets_list_wrap, orient="vertical", command=canvas.yview)
         self.targets_frame = tk.Frame(canvas, bg=COLORS["panel"])
 
         self.targets_frame.bind("<Configure>",
@@ -288,22 +323,61 @@ class FileCleanerApp(tk.Tk):
 
         self._build_targets_list()
 
-        settings_frame = tk.Frame(parent, bg=COLORS["panel"])
-        settings_frame.pack(fill="x", padx=18, pady=(0, 14))
+        # Exclude targets page
+        settings_frame = tk.Frame(self.exclude_targets_page, bg=COLORS["panel"])
+        settings_frame.pack(fill="both", expand=True, padx=18, pady=(0, 14))
 
-        tk.Label(settings_frame, text="EXCLUDES", bg=COLORS["panel"],
-                 fg=COLORS["text_muted"], font=("Helvetica", 9, "bold")).pack(anchor="w", pady=(4, 4))
-        self.exclude_var = tk.StringVar(value=", ".join(self.config_data.get("exclude_patterns", [])))
-        exclude_entry = tk.Entry(settings_frame, textvariable=self.exclude_var,
+        exclude_head = tk.Frame(settings_frame, bg=COLORS["panel"])
+        exclude_head.pack(fill="x", pady=(4, 4))
+        tk.Label(exclude_head, text="EXCLUDE PATHS", bg=COLORS["panel"],
+                 fg=COLORS["text_muted"], font=("Helvetica", 9, "bold")).pack(side="left")
+        self.exclude_count_var = tk.StringVar()
+        tk.Label(exclude_head, textvariable=self.exclude_count_var,
+                 bg=COLORS["panel"], fg=COLORS["text_muted"],
+                 font=("Helvetica", 9)).pack(side="right")
+
+        self.exclude_input_var = tk.StringVar()
+        exclude_row = tk.Frame(settings_frame, bg=COLORS["panel"])
+        exclude_row.pack(fill="x")
+        exclude_entry = tk.Entry(exclude_row, textvariable=self.exclude_input_var,
                                  bg=COLORS["card"], fg=COLORS["text_dim"],
                                  insertbackground=COLORS["text"],
                                  relief="flat", font=("Helvetica", 10),
                                  highlightthickness=1,
                                  highlightbackground=COLORS["border"],
                                  highlightcolor=COLORS["accent"])
-        exclude_entry.pack(fill="x", ipady=5)
-        exclude_entry.bind("<FocusOut>", lambda _e: self._save_scan_options())
-        exclude_entry.bind("<Return>", lambda _e: self._save_scan_options())
+        exclude_entry.pack(side="left", fill="x", expand=True, ipady=5)
+        exclude_entry.bind("<Return>", lambda _e: self._add_exclude_pattern())
+        add_exclude_btn = self._btn(exclude_row, "+ Add", self._add_exclude_pattern,
+                                    bg=COLORS["card"], fg=COLORS["text"], padx=8, width=6)
+        add_exclude_btn.pack(side="left", padx=(6, 0))
+        add_exclude_path_btn = self._btn(exclude_row, "+ Path", self._add_exclude_path,
+                                         bg=COLORS["card"], fg=COLORS["text"], padx=8, width=6)
+        add_exclude_path_btn.pack(side="left", padx=(6, 0))
+        tk.Label(settings_frame, text="Comma-separated names, globs, or paths to skip during scan and delete. Defaults include Python virtual env folders.",
+                 bg=COLORS["panel"], fg=COLORS["text_muted"],
+                 font=("Helvetica", 9), wraplength=300, justify="left").pack(anchor="w", pady=(4, 0))
+
+        exclude_list_wrap = tk.Frame(settings_frame, bg=COLORS["panel"])
+        exclude_list_wrap.pack(fill="both", expand=True, pady=(6, 0))
+        self.exclude_canvas = tk.Canvas(exclude_list_wrap, bg=COLORS["panel"], highlightthickness=0)
+        exclude_scrollbar = ttk.Scrollbar(exclude_list_wrap, orient="vertical", command=self.exclude_canvas.yview)
+        self.exclude_list_frame = tk.Frame(self.exclude_canvas, bg=COLORS["panel"])
+        self.exclude_list_frame.bind(
+            "<Configure>",
+            lambda _e: self.exclude_canvas.configure(scrollregion=self.exclude_canvas.bbox("all")),
+        )
+        self.exclude_canvas_window = self.exclude_canvas.create_window(
+            (0, 0), window=self.exclude_list_frame, anchor="nw"
+        )
+        self.exclude_canvas.bind(
+            "<Configure>",
+            lambda e: self.exclude_canvas.itemconfigure(self.exclude_canvas_window, width=e.width),
+        )
+        self.exclude_canvas.configure(yscrollcommand=exclude_scrollbar.set)
+        self.exclude_canvas.pack(side="left", fill="both", expand=True)
+        exclude_scrollbar.pack(side="right", fill="y")
+        self._refresh_exclude_list()
 
         depth_row = tk.Frame(settings_frame, bg=COLORS["panel"])
         depth_row.pack(fill="x", pady=(8, 0))
@@ -330,15 +404,42 @@ class FileCleanerApp(tk.Tk):
         export_btn = self._btn(config_row, "Export", self._export_rules,
                                bg=COLORS["card"], fg=COLORS["text"], padx=10)
         export_btn.pack(side="left", padx=(8, 0))
+        self._show_left_tab("clean")
+
+    def _show_left_tab(self, tab_name: str):
+        if not hasattr(self, "clean_targets_page"):
+            return
+        if tab_name == self._active_left_tab:
+            return
+
+        if tab_name == "exclude":
+            self.exclude_targets_page.tkraise()
+            active = "exclude"
+        else:
+            self.clean_targets_page.tkraise()
+            active = "clean"
+
+        self._active_left_tab = active
+        for name, button in getattr(self, "left_tab_buttons", {}).items():
+            if name == active:
+                button.config(
+                    bg=COLORS["accent"],
+                    fg="white",
+                    hover_bg=COLORS["accent_hover"],
+                )
+            else:
+                button.config(
+                    bg=COLORS["card"],
+                    fg=COLORS["text"],
+                    hover_bg=COLORS["card_hover"],
+                )
 
     def _build_targets_list(self):
         for w in self.targets_frame.winfo_children():
             w.destroy()
 
         if hasattr(self, "targets_count_var"):
-            enabled = sum(1 for t in self.config_data["targets"] if t["enabled"])
-            total = len(self.config_data["targets"])
-            self.targets_count_var.set(f"{enabled}/{total} enabled")
+            self.targets_count_var.set(self._target_count_text())
 
         self.target_check_vars = []
         query = ""
@@ -433,18 +534,10 @@ class FileCleanerApp(tk.Tk):
                  bg=COLORS["bg"], fg=COLORS["text_dim"],
                  font=("Helvetica", 12, "bold")).pack(side="left")
 
-        # Select all / none
-        self.select_all_btn = self._btn(toolbar, "Select All", self._select_all,
-                                        bg=COLORS["card"], fg=COLORS["text"], padx=12)
-        self.select_all_btn.pack(side="right", padx=(8, 0))
-        self.select_none_btn = self._btn(toolbar, "Select None", self._select_none,
-                                         bg=COLORS["card"], fg=COLORS["text"], padx=12)
-        self.select_none_btn.pack(side="right", padx=(8, 0))
-        self.select_all_btn.config(state="disabled")
-        self.select_none_btn.config(state="disabled")
-
-        self.scan_progress = ttk.Progressbar(toolbar, mode="indeterminate", length=150)
-        self.scan_progress.pack(side="right", padx=(8, 0))
+        self.selection_toggle_btn = self._btn(toolbar, "Select All", self._toggle_result_selection,
+                                              bg=COLORS["card"], fg=COLORS["text"], padx=12, width=11)
+        self.selection_toggle_btn.pack(side="right", padx=(8, 0))
+        self.selection_toggle_btn.config(state="disabled")
 
         # Results list
         list_frame = tk.Frame(parent, bg=COLORS["surface"], highlightthickness=1,
@@ -497,6 +590,10 @@ class FileCleanerApp(tk.Tk):
 
         self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self.tree.bind("<Motion>", self._on_tree_motion)
+        self.tree.bind("<Leave>", self._on_tree_leave)
+        self.path_tooltip = Tooltip(self.tree)
+        self._tooltip_row = None
         self.tree.tag_configure("folder", foreground=COLORS["warning"])
         self.tree.tag_configure("file",   foreground=COLORS["text"])
         self.tree.tag_configure("alt",    background=COLORS["row_alt"])
@@ -564,9 +661,7 @@ class FileCleanerApp(tk.Tk):
     def _toggle_target(self, idx, var):
         self.config_data["targets"][idx]["enabled"] = var.get()
         if hasattr(self, "targets_count_var"):
-            enabled = sum(1 for t in self.config_data["targets"] if t["enabled"])
-            total = len(self.config_data["targets"])
-            self.targets_count_var.set(f"{enabled}/{total} enabled")
+            self.targets_count_var.set(self._target_count_text())
         save_config(self.config_data)
 
     def _set_all_targets(self, enabled: bool):
@@ -575,15 +670,132 @@ class FileCleanerApp(tk.Tk):
         save_config(self.config_data)
         self._build_targets_list()
 
+    def _target_count_text(self):
+        enabled_targets = [t for t in self.config_data["targets"] if t["enabled"]]
+        total = len(self.config_data["targets"])
+        folder_count = sum(1 for t in enabled_targets if t["type"] == "folder")
+        ext_count = sum(1 for t in enabled_targets if t["type"] == "ext")
+        file_count = sum(1 for t in enabled_targets if t["type"] == "file")
+        return f"{len(enabled_targets)}/{total} enabled · F{folder_count} E{ext_count} File{file_count}"
+
     def _save_scan_options(self):
-        excludes = normalize_pattern_list(self.exclude_var.get() if hasattr(self, "exclude_var") else [])
         max_depth = normalize_max_depth(self.max_depth_var.get() if hasattr(self, "max_depth_var") else "")
-        self.config_data["exclude_patterns"] = excludes
+        self.config_data["exclude_patterns"] = normalize_pattern_list(
+            self.config_data.get("exclude_patterns", [])
+        )
+        self.config_data["exclude_defaults_applied"] = True
         self.config_data["max_depth"] = max_depth
         if hasattr(self, "max_depth_var"):
             self.max_depth_var.set(max_depth)
         save_config(self.config_data)
         self.status_var.set("Scan options saved")
+
+    def _set_exclude_patterns(self, patterns, status="Exclude paths saved"):
+        normalized = []
+        seen = set()
+        for pattern in normalize_pattern_list(patterns):
+            key = pattern.replace("\\", "/")
+            if key in seen:
+                continue
+            normalized.append(pattern)
+            seen.add(key)
+
+        self.config_data["exclude_patterns"] = normalized
+        self.config_data["exclude_defaults_applied"] = True
+        save_config(self.config_data)
+        self._refresh_exclude_list()
+        self.status_var.set(status)
+
+    def _refresh_exclude_list(self):
+        if not hasattr(self, "exclude_list_frame"):
+            return
+
+        for child in self.exclude_list_frame.winfo_children():
+            child.destroy()
+
+        patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
+        if hasattr(self, "exclude_count_var"):
+            self.exclude_count_var.set(f"{len(patterns)} item(s)")
+
+        if not patterns:
+            tk.Label(
+                self.exclude_list_frame,
+                text="No exclude paths",
+                bg=COLORS["panel"],
+                fg=COLORS["text_muted"],
+                font=("Helvetica", 9),
+            ).pack(anchor="w", pady=(2, 0))
+            return
+
+        for idx, pattern in enumerate(patterns):
+            row = tk.Frame(self.exclude_list_frame, bg=COLORS["card"], highlightthickness=1,
+                           highlightbackground=COLORS["panel"])
+            row.pack(fill="x", pady=2)
+
+            tk.Label(
+                row,
+                text=pattern,
+                bg=COLORS["card"],
+                fg=COLORS["text_dim"],
+                font=("Menlo", 9),
+                anchor="w",
+                justify="left",
+                wraplength=245,
+            ).pack(side="left", fill="x", expand=True, padx=(8, 4), pady=5)
+
+            del_btn = tk.Label(row, text="x", bg=COLORS["card"],
+                               fg=COLORS["text_muted"], font=("Helvetica", 10),
+                               cursor="hand2")
+            del_btn.pack(side="right", padx=(4, 8))
+            del_btn.bind("<Button-1>", lambda _e, i=idx: self._remove_exclude_pattern(i))
+            del_btn.bind("<Enter>", lambda e, w=del_btn: w.config(fg=COLORS["danger"]))
+            del_btn.bind("<Leave>", lambda e, w=del_btn: w.config(fg=COLORS["text_muted"]))
+
+    def _add_exclude_pattern(self):
+        raw = self.exclude_input_var.get().strip() if hasattr(self, "exclude_input_var") else ""
+        patterns_to_add = normalize_pattern_list(raw)
+        if not patterns_to_add:
+            messagebox.showinfo("Empty Exclude Path", "Enter a path, name, or glob pattern to exclude.")
+            return
+
+        patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
+        existing = {p.replace("\\", "/") for p in patterns}
+        added = 0
+        for pattern in patterns_to_add:
+            key = pattern.replace("\\", "/")
+            if key in existing:
+                continue
+            patterns.append(pattern)
+            existing.add(key)
+            added += 1
+
+        self.exclude_input_var.set("")
+        if added:
+            self._set_exclude_patterns(patterns, f"Added {added} exclude path(s)")
+        else:
+            self.status_var.set("Exclude path already exists")
+
+    def _add_exclude_path(self):
+        initial = self.path_var.get().strip() or str(Path.home())
+        folder = filedialog.askdirectory(initialdir=initial, title="Select path to exclude")
+        if not folder:
+            return
+
+        patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
+        normalized_folder = folder.replace("\\", "/")
+        existing = {p.replace("\\", "/") for p in patterns}
+        if normalized_folder not in existing:
+            patterns.append(folder)
+            self._set_exclude_patterns(patterns, "Exclude path added")
+        else:
+            self.status_var.set("Exclude path already exists")
+
+    def _remove_exclude_pattern(self, idx):
+        patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
+        if idx < 0 or idx >= len(patterns):
+            return
+        removed = patterns.pop(idx)
+        self._set_exclude_patterns(patterns, f"Removed exclude path: {removed}")
 
     def _export_rules(self):
         path = filedialog.asksaveasfilename(
@@ -621,11 +833,11 @@ class FileCleanerApp(tk.Tk):
 
         self.config_data["targets"] = targets
         self.config_data["exclude_patterns"] = normalize_pattern_list(payload.get("exclude_patterns", []))
+        self.config_data["exclude_defaults_applied"] = True
         self.config_data["max_depth"] = normalize_max_depth(payload.get("max_depth", ""))
         save_config(self.config_data)
 
-        if hasattr(self, "exclude_var"):
-            self.exclude_var.set(", ".join(self.config_data.get("exclude_patterns", [])))
+        self._refresh_exclude_list()
         if hasattr(self, "max_depth_var"):
             self.max_depth_var.set(self.config_data.get("max_depth", ""))
         self._build_targets_list()
@@ -839,7 +1051,6 @@ class FileCleanerApp(tk.Tk):
         LOGGER.info("ui scan requested path=%s log_file=%s", path, LOG_FILE)
         self.scan_btn.config(state="normal", text="Cancel", bg=COLORS["danger"],
                              hover_bg=COLORS["danger_hover"])
-        self.scan_progress.start(12)
         self.status_var.set(f"Scanning {path} ...")
 
         self._scan_cancelling = False
@@ -972,8 +1183,7 @@ class FileCleanerApp(tk.Tk):
                 self.empty_state.place(relx=0.5, rely=0.42, anchor="center")
 
             self.delete_btn.config(state="normal" if results else "disabled")
-            self.select_all_btn.config(state="normal" if results else "disabled")
-            self.select_none_btn.config(state="normal" if results else "disabled")
+            self._set_selection_toggle_enabled(bool(results))
             self.status_var.set(f"Scan complete - {count} item(s) found, {fmt_size(total_size)} total")
             LOGGER.info("ui scan complete results=%s bytes=%s", count, total_size)
         except Exception as exc:
@@ -994,8 +1204,7 @@ class FileCleanerApp(tk.Tk):
             self.empty_state.place(relx=0.5, rely=0.42, anchor="center")
 
         self.delete_btn.config(state="normal" if has_results else "disabled")
-        self.select_all_btn.config(state="normal" if has_results else "disabled")
-        self.select_none_btn.config(state="normal" if has_results else "disabled")
+        self._set_selection_toggle_enabled(has_results)
         self.status_var.set(f"Scan cancelled - {len(partial_results)} item(s) found before stopping")
         LOGGER.info("ui scan cancelled partial_results=%s", len(partial_results))
         self._finish_scan_ui()
@@ -1012,7 +1221,6 @@ class FileCleanerApp(tk.Tk):
             self._render_results_tree()
 
     def _finish_scan_ui(self):
-        self.scan_progress.stop()
         self._reset_scan_button()
         self._scan_thread = None
         self._scan_queue = None
@@ -1056,6 +1264,7 @@ class FileCleanerApp(tk.Tk):
 
         self.empty_state.place_forget()
         self._update_result_summary()
+        self._update_selection_toggle_state()
         count = len(self.scan_results)
         if count <= 20 or count % 100 == 0 or len(results) > 1:
             LOGGER.info(
@@ -1073,8 +1282,7 @@ class FileCleanerApp(tk.Tk):
         self.empty_state.config(text="📁\nScan failed")
         self.empty_state.place(relx=0.5, rely=0.42, anchor="center")
         self.delete_btn.config(state="disabled")
-        self.select_all_btn.config(state="disabled")
-        self.select_none_btn.config(state="disabled")
+        self._set_selection_toggle_enabled(False)
         self._finish_scan_ui()
         self.status_var.set(f"Scan failed - {message}")
         LOGGER.error("ui scan failed message=%s", message)
@@ -1126,29 +1334,20 @@ class FileCleanerApp(tk.Tk):
 
     def _update_result_summary(self):
         total = len(self.scan_results)
-        selected = sum(1 for v in self.result_vars if v.get())
-        selected_size = sum(
-
-            r["size"]
-
-            for r, v in zip(
-                self.scan_results,
-                self.result_vars
-            )
-
-            if (
-                    v.get()
-                    and r["kind"] == "file"
-            )
-
-        )
-
-        total_size = sum(r["size"] for r in self.scan_results)
+        selected_items = [
+            r for r, v in zip(self.scan_results, self.result_vars)
+            if v.get()
+        ]
+        selected = len(selected_items)
+        selected_folders = sum(1 for r in selected_items if r["kind"] == "folder")
+        selected_files = selected - selected_folders
+        selected_file_size = sum(r["size"] for r in selected_items if r["kind"] == "file")
 
         if total:
             self.result_summary_var.set(
-                f"Found {total} item(s) · Selected {selected} · "
-                f"Estimated release {fmt_size(selected_size)} · Total {fmt_size(total_size)}"
+                f"Total {total} · Selected {selected} "
+                f"({selected_folders} folders, {selected_files} files) · "
+                f"Selected file size {fmt_size(selected_file_size)}"
             )
         else:
             self.result_summary_var.set("No matching clean targets found")
@@ -1159,8 +1358,7 @@ class FileCleanerApp(tk.Tk):
         self.tree.delete(*self.tree.get_children())
         self.result_summary_var.set("Scanning...")
         self.delete_btn.config(state="disabled")
-        self.select_all_btn.config(state="disabled")
-        self.select_none_btn.config(state="disabled")
+        self._set_selection_toggle_enabled(False)
         self.empty_state.config(text="📁\nScanning clean targets...")
         self.empty_state.place(relx=0.5, rely=0.42, anchor="center")
 
@@ -1181,12 +1379,46 @@ class FileCleanerApp(tk.Tk):
         vals[0] = "☑" if var.get() else "☐"
         self.tree.item(row_id, values=vals)
         self._update_result_summary()
+        self._update_selection_toggle_state()
 
     def _on_tree_select(self, _event):
         # Native Treeview selection is only visual. Cleanup selection is driven
         # by the checkbox column; syncing both ways caused large scans to
         # repeatedly redraw the whole table and made the UI look stuck.
         return
+
+    def _on_tree_motion(self, event):
+        row_id = self.tree.identify_row(event.y)
+        col = self.tree.identify_column(event.x)
+        if col != "#4" or not row_id:
+            self._hide_path_tooltip()
+            return
+
+        try:
+            idx = int(row_id)
+        except ValueError:
+            self._hide_path_tooltip()
+            return
+
+        if idx < 0 or idx >= len(self.scan_results):
+            self._hide_path_tooltip()
+            return
+
+        path = self.scan_results[idx].get("path", "")
+        if not path:
+            self._hide_path_tooltip()
+            return
+
+        self._tooltip_row = row_id
+        self.path_tooltip.show(path, event.x_root + 14, event.y_root + 16)
+
+    def _on_tree_leave(self, _event):
+        self._hide_path_tooltip()
+
+    def _hide_path_tooltip(self):
+        self._tooltip_row = None
+        if hasattr(self, "path_tooltip"):
+            self.path_tooltip.hide()
 
     def _select_all(self):
         self._ignore_tree_select = True
@@ -1197,6 +1429,7 @@ class FileCleanerApp(tk.Tk):
             self.tree.item(str(i), values=vals)
         self._ignore_tree_select = False
         self._update_result_summary()
+        self._update_selection_toggle_state()
 
     def _select_none(self):
         self._ignore_tree_select = True
@@ -1207,11 +1440,45 @@ class FileCleanerApp(tk.Tk):
             self.tree.item(str(i), values=vals)
         self._ignore_tree_select = False
         self._update_result_summary()
+        self._update_selection_toggle_state()
+
+    def _toggle_result_selection(self):
+        if not self.result_vars:
+            return
+        if all(v.get() for v in self.result_vars):
+            self._select_none()
+        else:
+            self._select_all()
+
+    def _set_selection_toggle_enabled(self, enabled: bool):
+        if not hasattr(self, "selection_toggle_btn"):
+            return
+        self.selection_toggle_btn.config(state="normal" if enabled else "disabled")
+        self._update_selection_toggle_state()
+
+    def _update_selection_toggle_state(self):
+        if not hasattr(self, "selection_toggle_btn"):
+            return
+        if not self.result_vars:
+            self.selection_toggle_btn.config(text="Select All")
+            return
+        text = "Select None" if all(v.get() for v in self.result_vars) else "Select All"
+        self.selection_toggle_btn.config(text=text)
 
     def _delete_selected(self):
+        self._save_scan_options()
         selected = [(i, r) for i, r in enumerate(self.scan_results) if self.result_vars[i].get()]
         if not selected:
             messagebox.showinfo("Nothing selected", "Please check items to move.")
+            return
+
+        protected, selected = self._split_whitelisted_items(selected)
+        if not selected:
+            messagebox.showinfo(
+                "Whitelist Protected",
+                f"{len(protected)} selected item(s) match the whitelist and will not be moved.",
+            )
+            self.status_var.set(f"Skipped - {len(protected)} selected item(s) protected by whitelist")
             return
 
         total_size = sum(r["size"] for _, r in selected)
@@ -1228,6 +1495,8 @@ class FileCleanerApp(tk.Tk):
             f"{preview}\n\n"
             "You can restore them from the system Trash/Recycle Bin."
         )
+        if protected:
+            msg += f"\n\nWhitelist protected: {len(protected)} selected item(s) will be skipped."
         if not messagebox.askyesno("Confirm Move", msg, icon="warning"):
             return
 
@@ -1246,19 +1515,42 @@ class FileCleanerApp(tk.Tk):
         self._render_results_tree()
         self._update_result_summary()
 
-        self.status_var.set(f"Done - {ok} moved to trash, {fail} failed")
+        skipped = len(protected)
+        self.status_var.set(f"Done - {ok} moved to trash, {fail} failed, {skipped} whitelist skipped")
         if fail:
             messagebox.showwarning("Some failures", f"{fail} item(s) could not be moved to Trash/Recycle Bin.")
 
         has_results = bool(self.scan_results)
         self.delete_btn.config(state="normal" if has_results else "disabled")
-        self.select_all_btn.config(state="normal" if has_results else "disabled")
-        self.select_none_btn.config(state="normal" if has_results else "disabled")
+        self._set_selection_toggle_enabled(has_results)
         if has_results:
             self.empty_state.place_forget()
         else:
             self.empty_state.config(text="All selected items moved to trash")
             self.empty_state.place(relx=0.5, rely=0.42, anchor="center")
+
+    def _split_whitelisted_items(self, indexed_results):
+        patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
+        if not patterns:
+            return [], indexed_results
+
+        root_text = self.path_var.get().strip()
+        root = Path(root_text) if root_text else Path("/")
+        protected = []
+        allowed = []
+        for item in indexed_results:
+            _idx, result = item
+            try:
+                blocked = should_exclude(Path(result["path"]), root, patterns)
+            except Exception:
+                blocked = False
+            if blocked:
+                protected.append(item)
+            else:
+                allowed.append(item)
+        if protected:
+            LOGGER.info("delete skipped whitelist count=%s", len(protected))
+        return protected, allowed
 
     def _on_close(self):
         LOGGER.info("app closing")
