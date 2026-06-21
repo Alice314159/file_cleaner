@@ -8,7 +8,8 @@ class FlatButton(tk.Label):
 
     def __init__(self, parent, text, command, bg, fg="white",
                  hover_bg=None, disabled_bg=None, disabled_fg=None,
-                 font=("Helvetica", 11), padx=14, pady=7, width=None):
+                 font=("Helvetica", 11), padx=14, pady=7, width=None,
+                 border_bg=None, border_width=0):
         super().__init__(
             parent,
             text=text,
@@ -22,6 +23,9 @@ class FlatButton(tk.Label):
             anchor="center",
             relief="flat",
             bd=0,
+            highlightthickness=border_width,
+            highlightbackground=border_bg or bg,
+            highlightcolor=border_bg or bg,
         )
         self.command = command
         self.base_bg = bg
@@ -29,6 +33,8 @@ class FlatButton(tk.Label):
         self.hover_bg = hover_bg or bg
         self.disabled_bg = disabled_bg or COLORS["disabled"]
         self.disabled_fg = disabled_fg or COLORS["disabled_text"]
+        self.border_bg = border_bg or bg
+        self.border_width = border_width
         self.enabled = True
 
         self.bind("<Enter>", self._on_enter)
@@ -56,6 +62,13 @@ class FlatButton(tk.Label):
             self.disabled_bg = kw.pop("disabled_bg")
         if "disabled_fg" in kw:
             self.disabled_fg = kw.pop("disabled_fg")
+        if "border_bg" in kw:
+            self.border_bg = kw.pop("border_bg")
+            kw["highlightbackground"] = self.border_bg
+            kw["highlightcolor"] = self.border_bg
+        if "border_width" in kw:
+            self.border_width = kw.pop("border_width")
+            kw["highlightthickness"] = self.border_width
 
         result = super().configure(**kw)
         if state is not None:
@@ -67,9 +80,21 @@ class FlatButton(tk.Label):
     def _set_enabled(self, enabled: bool):
         self.enabled = enabled
         if enabled:
-            super().configure(bg=self.base_bg, fg=self.base_fg, cursor="hand2")
+            super().configure(
+                bg=self.base_bg,
+                fg=self.base_fg,
+                cursor="hand2",
+                highlightbackground=self.border_bg,
+                highlightcolor=self.border_bg,
+            )
         else:
-            super().configure(bg=self.disabled_bg, fg=self.disabled_fg, cursor="")
+            super().configure(
+                bg=self.disabled_bg,
+                fg=self.disabled_fg,
+                cursor="",
+                highlightbackground=COLORS["border"],
+                highlightcolor=COLORS["border"],
+            )
 
     def _on_enter(self, _event):
         if self.enabled:

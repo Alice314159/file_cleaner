@@ -124,15 +124,15 @@ class FileCleanerApp(tk.Tk):
             background=COLORS["surface"],
             foreground=COLORS["text"],
             fieldbackground=COLORS["surface"],
-            rowheight=34,
+            rowheight=28,
             borderwidth=0,
-            font=("Helvetica", 11))
+            font=("Menlo", 10))
         s.configure("Treeview.Heading",
-            background=COLORS["card"],
+            background=COLORS["surface"],
             foreground=COLORS["text_dim"],
             borderwidth=0,
-            padding=(8, 8),
-            font=("Helvetica", 10, "bold"))
+            padding=(8, 6),
+            font=("Helvetica", 9, "bold"))
         s.map("Treeview",
             background=[("selected", COLORS["highlight"])],
             foreground=[("selected", COLORS["text"])])
@@ -140,105 +140,70 @@ class FileCleanerApp(tk.Tk):
     # ── UI Layout ────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        # Header
-        hdr = tk.Frame(self, bg=COLORS["bg"], pady=16, padx=24)
-        hdr.pack(fill="x")
-
-        mark = tk.Label(hdr, text="FC", bg=COLORS["accent"], fg="white",
-                        font=("Helvetica", 12, "bold"), padx=9, pady=5)
-        mark.pack(side="left")
-
-        title_wrap = tk.Frame(hdr, bg=COLORS["bg"])
-        title_wrap.pack(side="left", padx=(12, 0))
-        tk.Label(title_wrap, text="File Cleaner", bg=COLORS["bg"],
-                 fg=COLORS["text"], font=("Helvetica", 20, "bold")).pack(anchor="w")
-        tk.Label(title_wrap, text="Recursive project cleanup tool",
-                 bg=COLORS["bg"], fg=COLORS["text_muted"],
-                 font=("Helvetica", 11)).pack(anchor="w", pady=(1, 0))
-
-        sep = tk.Frame(self, bg=COLORS["border"], height=1)
-        sep.pack(fill="x")
-
-        # Body: draggable left/right panes
-        body = ttk.Panedwindow(self, orient="horizontal")
+        # Body: fixed 280px sidebar + flexible main area.
+        body = tk.Frame(self, bg=COLORS["bg"])
         body.pack(fill="both", expand=True, padx=0, pady=0)
 
-        left = tk.Frame(body, bg=COLORS["panel"], width=350)
+        left = tk.Frame(body, bg=COLORS["panel"], width=280)
         left.pack_propagate(False)
+        left.pack(side="left", fill="y")
+
+        divider = tk.Frame(body, bg=COLORS["border"], width=1)
+        divider.pack(side="left", fill="y")
 
         right = tk.Frame(body, bg=COLORS["bg"])
-        body.add(left, weight=0)
-        body.add(right, weight=1)
+        right.pack(side="left", fill="both", expand=True)
 
         self._build_left(left)
         self._build_right(right)
 
         # Status bar
         self.status_var = tk.StringVar(value="Ready - select a path and click Scan")
-        sbar = tk.Frame(self, bg=COLORS["panel"], height=32)
+        sbar = tk.Frame(self, bg=COLORS["panel"], height=30)
         sbar.pack(fill="x", side="bottom")
         tk.Label(sbar, textvariable=self.status_var,
                  bg=COLORS["panel"], fg=COLORS["text_dim"],
                  font=("Helvetica", 11), anchor="w", padx=14).pack(fill="x", pady=4)
 
     def _build_left(self, parent):
-        # Path section
-        tk.Label(parent, text="SCAN PATH", bg=COLORS["panel"],
-                 fg=COLORS["text_muted"], font=("Helvetica", 10, "bold")).pack(anchor="w", padx=18, pady=(18, 7))
+        hdr = tk.Frame(parent, bg=COLORS["panel"], pady=14, padx=16)
+        hdr.pack(fill="x")
 
-        path_card = tk.Frame(parent, bg=COLORS["card"], highlightthickness=1,
-                             highlightbackground=COLORS["border"])
-        path_card.pack(fill="x", padx=18, pady=(0, 10))
+        mark = tk.Label(hdr, text="FC", bg=COLORS["accent"], fg="white",
+                        font=("Helvetica", 12, "bold"), padx=9, pady=5)
+        mark.pack(side="left")
 
-        path_row = tk.Frame(path_card, bg=COLORS["card"])
-        path_row.pack(fill="x", padx=10, pady=(10, 8))
+        title_wrap = tk.Frame(hdr, bg=COLORS["panel"])
+        title_wrap.pack(side="left", padx=(12, 0))
+        tk.Label(title_wrap, text="File Cleaner", bg=COLORS["panel"],
+                 fg=COLORS["text"], font=("Helvetica", 18, "bold")).pack(anchor="w")
+        tk.Label(title_wrap, text="Recursive project cleanup tool",
+                 bg=COLORS["panel"], fg=COLORS["text_muted"],
+                 font=("Helvetica", 10)).pack(anchor="w", pady=(1, 0))
 
-        self.path_var = tk.StringVar()
-        self.path_var.trace_add("write", lambda *_: self._sync_path_display())
-        self.path_combo = ttk.Combobox(path_row, textvariable=self.path_var,
-                                        font=("Helvetica", 11), state="normal")
-        self.path_combo.pack(side="left", fill="x", expand=True)
-
-        browse_btn = self._btn(path_row, "Browse", self._browse_path,
-                               bg=COLORS["card_hover"], fg=COLORS["text"], width=7)
-        browse_btn.pack(side="left", padx=(8, 0))
-
-        tk.Label(path_card, text="Selected folder", bg=COLORS["card"],
-                 fg=COLORS["text_muted"], font=("Helvetica", 9, "bold")).pack(anchor="w", padx=10)
-
-        self.path_display_var = tk.StringVar(value="No folder selected")
-        self.path_display_label = tk.Label(
-            path_card,
-            textvariable=self.path_display_var,
-            bg=COLORS["card"],
-            fg=COLORS["text_dim"],
-            font=("Menlo", 10),
-            anchor="w",
-            justify="left",
-            wraplength=280,
-        )
-        self.path_display_label.pack(fill="x", padx=10, pady=(3, 10))
-        path_card.bind("<Configure>", self._resize_path_display)
-        self._sync_path_display()
+        top_sep = tk.Frame(parent, bg=COLORS["border"], height=1)
+        top_sep.pack(fill="x")
 
         # Action buttons
         btn_row = tk.Frame(parent, bg=COLORS["panel"])
-        btn_row.pack(fill="x", padx=18, pady=(0, 0))
+        btn_row.pack(fill="x", padx=12, pady=(16, 0))
 
         self.scan_btn = self._btn(btn_row, "Scan", self._on_scan_button,
                                    bg=COLORS["accent"], fg="white")
         self.scan_btn.pack(fill="x", pady=(0, 8))
 
         self.delete_btn = self._btn(btn_row, "Move Selected to Trash", self._delete_selected,
-                                     bg=COLORS["danger"], fg="white")
+                                     bg=COLORS["panel"], fg=COLORS["danger"],
+                                     hover_bg=COLORS["danger_soft"],
+                                     border_bg=COLORS["danger"], border_width=1)
         self.delete_btn.pack(fill="x")
         self.delete_btn.config(state="disabled")
 
         sep = tk.Frame(parent, bg=COLORS["border"], height=1)
-        sep.pack(fill="x", padx=18, pady=16)
+        sep.pack(fill="x", padx=12, pady=14)
 
         tab_bar = tk.Frame(parent, bg=COLORS["panel"])
-        tab_bar.pack(fill="x", padx=18, pady=(0, 10))
+        tab_bar.pack(fill="x", padx=12, pady=(0, 10))
         self.left_tab_buttons = {}
         self.clean_tab_btn = self._btn(
             tab_bar,
@@ -273,7 +238,7 @@ class FileCleanerApp(tk.Tk):
 
         # Clean targets page
         targets_head = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
-        targets_head.pack(fill="x", padx=18, pady=(0, 8))
+        targets_head.pack(fill="x", padx=12, pady=(0, 8))
         tk.Label(targets_head, text="CLEAN TARGETS", bg=COLORS["panel"],
                  fg=COLORS["text_muted"], font=("Helvetica", 10, "bold")).pack(side="left")
         self.targets_count_var = tk.StringVar(value=self._target_count_text())
@@ -284,7 +249,7 @@ class FileCleanerApp(tk.Tk):
                  fg=COLORS["text_muted"], font=("Helvetica", 10)).pack(side="right", padx=(0, 8))
 
         target_tools = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
-        target_tools.pack(fill="x", padx=18, pady=(0, 8))
+        target_tools.pack(fill="x", padx=12, pady=(0, 8))
 
         self.target_filter_var = tk.StringVar()
         self.target_filter_var.trace_add("write", lambda *_: self._build_targets_list())
@@ -297,35 +262,31 @@ class FileCleanerApp(tk.Tk):
                                  highlightcolor=COLORS["accent"])
         target_filter.pack(side="left", fill="x", expand=True, ipady=5)
 
-        enable_all_btn = self._btn(target_tools, "All", lambda: self._set_all_targets(True),
-                                   bg=COLORS["card"], fg=COLORS["text"], padx=8, width=4)
-        enable_all_btn.pack(side="left", padx=(6, 0))
-        disable_all_btn = self._btn(target_tools, "None", lambda: self._set_all_targets(False),
-                                    bg=COLORS["card"], fg=COLORS["text"], padx=8, width=4)
-        disable_all_btn.pack(side="left", padx=(6, 0))
-
         # Scrollable targets list
-        targets_list_wrap = tk.Frame(self.clean_targets_page, bg=COLORS["panel"])
+        targets_list_wrap = tk.Frame(self.clean_targets_page, bg=COLORS["panel"],
+                                     highlightthickness=1,
+                                     highlightbackground=COLORS["border_soft"])
         targets_list_wrap.pack(fill="both", expand=True)
-        canvas = tk.Canvas(targets_list_wrap, bg=COLORS["panel"], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(targets_list_wrap, orient="vertical", command=canvas.yview)
-        self.targets_frame = tk.Frame(canvas, bg=COLORS["panel"])
+        self.targets_canvas = tk.Canvas(targets_list_wrap, bg=COLORS["panel"], highlightthickness=0)
+        self.targets_scrollbar = self._scrollbar(targets_list_wrap, self.targets_canvas.yview)
+        self.targets_frame = tk.Frame(self.targets_canvas, bg=COLORS["panel"])
 
         self.targets_frame.bind("<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        self.targets_canvas_window = canvas.create_window((0, 0), window=self.targets_frame, anchor="nw")
-        canvas.bind("<Configure>",
-            lambda e: canvas.itemconfigure(self.targets_canvas_window, width=e.width))
-        canvas.configure(yscrollcommand=scrollbar.set)
+            lambda e: self.targets_canvas.configure(scrollregion=self.targets_canvas.bbox("all")))
+        self.targets_canvas_window = self.targets_canvas.create_window((0, 0), window=self.targets_frame, anchor="nw")
+        self.targets_canvas.bind("<Configure>",
+            lambda e: self.targets_canvas.itemconfigure(self.targets_canvas_window, width=e.width))
+        self.targets_canvas.configure(yscrollcommand=self.targets_scrollbar.set)
 
-        canvas.pack(side="left", fill="both", expand=True, padx=(18, 0))
-        scrollbar.pack(side="right", fill="y", padx=(0, 8))
+        self.targets_canvas.pack(side="left", fill="both", expand=True, padx=(12, 0))
+        self.targets_scrollbar.pack(side="right", fill="y")
+        self._bind_canvas_scroll(self.targets_canvas, self.targets_frame)
 
         self._build_targets_list()
 
         # Exclude targets page
         settings_frame = tk.Frame(self.exclude_targets_page, bg=COLORS["panel"])
-        settings_frame.pack(fill="both", expand=True, padx=18, pady=(0, 14))
+        settings_frame.pack(fill="both", expand=True, padx=12, pady=(0, 14))
 
         exclude_head = tk.Frame(settings_frame, bg=COLORS["panel"])
         exclude_head.pack(fill="x", pady=(4, 4))
@@ -351,17 +312,24 @@ class FileCleanerApp(tk.Tk):
         add_exclude_btn = self._btn(exclude_row, "+ Add", self._add_exclude_pattern,
                                     bg=COLORS["card"], fg=COLORS["text"], padx=8, width=6)
         add_exclude_btn.pack(side="left", padx=(6, 0))
-        add_exclude_path_btn = self._btn(exclude_row, "+ Path", self._add_exclude_path,
-                                         bg=COLORS["card"], fg=COLORS["text"], padx=8, width=6)
-        add_exclude_path_btn.pack(side="left", padx=(6, 0))
+        exclude_pick_row = tk.Frame(settings_frame, bg=COLORS["panel"])
+        exclude_pick_row.pack(fill="x", pady=(6, 0))
+        add_exclude_file_btn = self._btn(exclude_pick_row, "+ File", self._add_exclude_file,
+                                         bg=COLORS["card"], fg=COLORS["text"], padx=8)
+        add_exclude_file_btn.pack(side="left", fill="x", expand=True)
+        add_exclude_path_btn = self._btn(exclude_pick_row, "+ Path", self._add_exclude_path,
+                                         bg=COLORS["card"], fg=COLORS["text"], padx=8)
+        add_exclude_path_btn.pack(side="left", fill="x", expand=True, padx=(6, 0))
         tk.Label(settings_frame, text="Comma-separated names, globs, or paths to skip during scan and delete. Defaults include Python virtual env folders.",
                  bg=COLORS["panel"], fg=COLORS["text_muted"],
                  font=("Helvetica", 9), wraplength=300, justify="left").pack(anchor="w", pady=(4, 0))
 
-        exclude_list_wrap = tk.Frame(settings_frame, bg=COLORS["panel"])
+        exclude_list_wrap = tk.Frame(settings_frame, bg=COLORS["panel"],
+                                     highlightthickness=1,
+                                     highlightbackground=COLORS["border_soft"])
         exclude_list_wrap.pack(fill="both", expand=True, pady=(6, 0))
         self.exclude_canvas = tk.Canvas(exclude_list_wrap, bg=COLORS["panel"], highlightthickness=0)
-        exclude_scrollbar = ttk.Scrollbar(exclude_list_wrap, orient="vertical", command=self.exclude_canvas.yview)
+        exclude_scrollbar = self._scrollbar(exclude_list_wrap, self.exclude_canvas.yview)
         self.exclude_list_frame = tk.Frame(self.exclude_canvas, bg=COLORS["panel"])
         self.exclude_list_frame.bind(
             "<Configure>",
@@ -377,6 +345,7 @@ class FileCleanerApp(tk.Tk):
         self.exclude_canvas.configure(yscrollcommand=exclude_scrollbar.set)
         self.exclude_canvas.pack(side="left", fill="both", expand=True)
         exclude_scrollbar.pack(side="right", fill="y")
+        self._bind_canvas_scroll(self.exclude_canvas, self.exclude_list_frame)
         self._refresh_exclude_list()
 
         depth_row = tk.Frame(settings_frame, bg=COLORS["panel"])
@@ -437,6 +406,8 @@ class FileCleanerApp(tk.Tk):
     def _build_targets_list(self):
         for w in self.targets_frame.winfo_children():
             w.destroy()
+        if hasattr(self, "targets_canvas"):
+            self.targets_canvas.yview_moveto(0)
 
         if hasattr(self, "targets_count_var"):
             self.targets_count_var.set(self._target_count_text())
@@ -460,70 +431,95 @@ class FileCleanerApp(tk.Tk):
             tk.Label(self.targets_frame, text="No matching targets",
                      bg=COLORS["panel"], fg=COLORS["text_muted"],
                      font=("Helvetica", 10)).pack(fill="x", pady=10)
+            self._refresh_canvas_scroll(self.targets_canvas, self.targets_frame)
             return
 
-        for i, t in visible:
-            var = tk.BooleanVar(value=t["enabled"])
-            self.target_check_vars.append(var)
+        grouped = [
+            ("FOLDERS", [(i, t) for i, t in visible if t["type"] == "folder"]),
+            ("FILE EXTENSIONS", [(i, t) for i, t in visible if t["type"] == "ext"]),
+            ("FILES", [(i, t) for i, t in visible if t["type"] == "file"]),
+        ]
 
-            row = tk.Frame(self.targets_frame, bg=COLORS["card"], highlightthickness=1,
-                           highlightbackground=COLORS["panel"])
-            row.pack(fill="x", pady=3)
-
-            cb = tk.Checkbutton(row, variable=var,
-                                 bg=COLORS["card"],
-                                 activebackground=COLORS["card"],
-                                 selectcolor=COLORS["accent"],
-                                 relief="flat", bd=0,
-                                 command=lambda i=i, v=var: self._toggle_target(i, v))
-            cb.pack(side="left", padx=(6, 2), pady=5)
-
-            # color tag
-            tag_bg = {
-                "folder": COLORS["folder_tag"],
-                "ext": COLORS["ext_tag"],
-                "file": COLORS["file_tag"],
-            }.get(t["type"], COLORS["ext_tag"])
-            tag_lbl = tk.Label(row, text=t["type"],
-                                bg=tag_bg, fg="white",
-                                font=("Helvetica", 8, "bold"),
-                                padx=5, pady=2, width=6)
-            tag_lbl.pack(side="left", padx=(0, 8))
-
-            risk_text, risk_bg = target_risk(t)
-            risk_lbl = tk.Label(row, text=risk_text,
-                                bg=risk_bg, fg="white",
-                                font=("Helvetica", 8, "bold"),
-                                padx=5, pady=2, width=4)
-            risk_lbl.pack(side="left", padx=(0, 8))
-
-            tk.Label(row, text=t["pattern"],
-                     bg=COLORS["card"], fg=COLORS["text"],
-                     font=("Helvetica", 11), anchor="w").pack(side="left", fill="x", expand=True)
-
-            mode = t.get("match_mode", "exact")
-            if mode != "exact":
-                tk.Label(row, text=mode,
-                         bg=COLORS["card"], fg=COLORS["text_muted"],
-                         font=("Helvetica", 8), padx=4).pack(side="left", padx=(4, 0))
-
-            if t.get("builtin"):
-                del_btn = tk.Label(row, text="lock", bg=COLORS["card"],
-                                   fg=COLORS["disabled_text"], font=("Helvetica", 9))
-                del_btn.pack(side="right", padx=(8, 9))
+        for title, items in grouped:
+            if not items:
                 continue
+            tk.Label(
+                self.targets_frame,
+                text=f"{title}  {len(items)}",
+                bg=COLORS["panel"],
+                fg=COLORS["text_muted"],
+                font=("Helvetica", 8, "bold"),
+                anchor="w",
+            ).pack(fill="x", padx=(2, 0), pady=(8, 3))
+            for i, t in items:
+                self._build_target_row(i, t)
 
-            del_btn = tk.Label(row, text="x", bg=COLORS["card"],
-                               fg=COLORS["text_muted"], font=("Helvetica", 10),
-                               cursor="hand2")
-            del_btn.pack(side="right", padx=(8, 9))
-            del_btn.bind("<Button-1>", lambda e, i=i: self._remove_target(i))
-            del_btn.bind("<Enter>", lambda e, w=del_btn: w.config(fg=COLORS["danger"]))
-            del_btn.bind("<Leave>", lambda e, w=del_btn: w.config(fg=COLORS["text_muted"]))
+        self._refresh_canvas_scroll(self.targets_canvas, self.targets_frame)
+
+    def _build_target_row(self, i, t):
+        var = tk.BooleanVar(value=t["enabled"])
+        self.target_check_vars.append(var)
+        enabled = bool(t["enabled"])
+        row_bg = COLORS["card"] if enabled else COLORS["panel"]
+        fg = COLORS["text"] if enabled else COLORS["disabled_text"]
+        muted_fg = COLORS["text_muted"] if enabled else COLORS["disabled_text"]
+        border = COLORS["border_soft"] if enabled else COLORS["panel"]
+
+        row = tk.Frame(self.targets_frame, bg=row_bg, highlightthickness=1,
+                       highlightbackground=border)
+        row.pack(fill="x", pady=2)
+
+        cb = tk.Checkbutton(row, variable=var,
+                             bg=row_bg,
+                             activebackground=row_bg,
+                             selectcolor=COLORS["accent"],
+                             relief="flat", bd=0,
+                             command=lambda i=i, v=var: self._toggle_target(i, v))
+        cb.pack(side="left", padx=(4, 2), pady=4)
+
+        tag_lbl = tk.Label(row, text=t["type"],
+                            bg=row_bg, fg=COLORS["folder_tag"] if enabled else COLORS["disabled_text"],
+                            font=("Helvetica", 8, "bold"),
+                            padx=5, pady=1, width=6,
+                            highlightthickness=1,
+                            highlightbackground=COLORS["folder_tag"] if enabled else COLORS["border"])
+        tag_lbl.pack(side="left", padx=(0, 6))
+
+        risk_text, risk_bg = target_risk(t)
+        risk_lbl = tk.Label(row, text=risk_text,
+                            bg=risk_bg if enabled else COLORS["border_soft"],
+                            fg=COLORS["text"] if enabled else COLORS["disabled_text"],
+                            font=("Helvetica", 8, "bold"),
+                            padx=5, pady=1, width=4)
+        risk_lbl.pack(side="left", padx=(0, 6))
+
+        tk.Label(row, text=t["pattern"],
+                 bg=row_bg, fg=fg,
+                 font=("Helvetica", 10), anchor="w").pack(side="left", fill="x", expand=True)
+
+        mode = t.get("match_mode", "exact")
+        if mode != "exact":
+            tk.Label(row, text=mode,
+                     bg=row_bg, fg=muted_fg,
+                     font=("Helvetica", 8), padx=4).pack(side="left", padx=(4, 0))
+
+        if t.get("builtin"):
+            del_btn = tk.Label(row, text="lock", bg=row_bg,
+                               fg=muted_fg, font=("Helvetica", 8))
+            del_btn.pack(side="right", padx=(6, 7))
+            return
+
+        del_btn = tk.Label(row, text="x", bg=row_bg,
+                           fg=muted_fg, font=("Helvetica", 10),
+                           cursor="hand2")
+        del_btn.pack(side="right", padx=(6, 7))
+        del_btn.bind("<Button-1>", lambda e, i=i: self._remove_target(i))
+        del_btn.bind("<Enter>", lambda e, w=del_btn: w.config(fg=COLORS["danger"]))
+        del_btn.bind("<Leave>", lambda e, w=del_btn: w.config(fg=COLORS["text_muted"]))
 
     def _build_right(self, parent):
         # Toolbar
-        toolbar = tk.Frame(parent, bg=COLORS["bg"], pady=14, padx=18)
+        toolbar = tk.Frame(parent, bg=COLORS["bg"], pady=10, padx=24)
         toolbar.pack(fill="x")
 
         summary = tk.Frame(toolbar, bg=COLORS["bg"])
@@ -532,17 +528,50 @@ class FileCleanerApp(tk.Tk):
         self.result_summary_var = tk.StringVar(value="No scan results yet")
         tk.Label(summary, textvariable=self.result_summary_var,
                  bg=COLORS["bg"], fg=COLORS["text_dim"],
-                 font=("Helvetica", 12, "bold")).pack(side="left")
+                 font=("Helvetica", 11, "bold")).pack(side="left")
 
         self.selection_toggle_btn = self._btn(toolbar, "Select All", self._toggle_result_selection,
                                               bg=COLORS["card"], fg=COLORS["text"], padx=12, width=11)
         self.selection_toggle_btn.pack(side="right", padx=(8, 0))
         self.selection_toggle_btn.config(state="disabled")
 
+        path_panel = tk.Frame(toolbar, bg=COLORS["bg"])
+        path_panel.pack(side="right", fill="x", expand=True, padx=(12, 0))
+        path_head = tk.Frame(path_panel, bg=COLORS["bg"])
+        path_head.pack(fill="x")
+        tk.Label(path_head, text="SCAN PATH", bg=COLORS["bg"],
+                 fg=COLORS["text_muted"], font=("Helvetica", 8, "bold")).pack(side="left")
+
+        path_row = tk.Frame(path_panel, bg=COLORS["bg"])
+        path_row.pack(fill="x", pady=(4, 0))
+        self.path_var = tk.StringVar()
+        self.path_var.trace_add("write", lambda *_: self._sync_path_display())
+        self.path_combo = ttk.Combobox(path_row, textvariable=self.path_var,
+                                        font=("Helvetica", 10), state="normal")
+        self.path_combo.pack(side="left", fill="x", expand=True)
+        browse_btn = self._btn(path_row, "Browse", self._browse_path,
+                               bg=COLORS["card"], fg=COLORS["text"], padx=10)
+        browse_btn.pack(side="left", padx=(8, 0))
+
+        self.path_display_var = tk.StringVar(value="No folder selected")
+        self.path_display_label = tk.Label(
+            path_panel,
+            textvariable=self.path_display_var,
+            bg=COLORS["bg"],
+            fg=COLORS["text_dim"],
+            font=("Menlo", 9),
+            anchor="e",
+        )
+        self.path_display_label.pack(fill="x", pady=(3, 0))
+        self.path_display_label.bind("<Enter>", self._show_path_tooltip)
+        self.path_display_label.bind("<Leave>", lambda _e: self._hide_path_display_tooltip())
+        self.path_display_tooltip = Tooltip(self.path_display_label)
+        self._sync_path_display()
+
         # Results list
         list_frame = tk.Frame(parent, bg=COLORS["surface"], highlightthickness=1,
                               highlightbackground=COLORS["border"])
-        list_frame.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        list_frame.pack(fill="both", expand=True, padx=(0, 0), pady=(0, 0))
 
         cols = ("sel", "kind", "name", "path", "size", "modified")
         self.tree = ttk.Treeview(list_frame, columns=cols, show="headings",
@@ -560,12 +589,12 @@ class FileCleanerApp(tk.Tk):
         self.tree.heading("modified", text="Modified", anchor="w",
                           command=lambda: self._sort_results("modified"))
 
-        self.tree.column("sel",  width=36,  stretch=False, anchor="center")
-        self.tree.column("kind", width=60,  stretch=False, anchor="w")
-        self.tree.column("name", width=190, stretch=False, anchor="w")
+        self.tree.column("sel",  width=68,  stretch=False, anchor="center")
+        self.tree.column("kind", width=96,  stretch=False, anchor="w")
+        self.tree.column("name", width=210, stretch=False, anchor="w")
         self.tree.column("path", width=360, stretch=True,  anchor="w")
-        self.tree.column("size", width=90,  stretch=False, anchor="e")
-        self.tree.column("modified", width=135, stretch=False, anchor="w")
+        self.tree.column("size", width=86,  stretch=False, anchor="e")
+        self.tree.column("modified", width=130, stretch=False, anchor="w")
 
         vsb = ttk.Scrollbar(list_frame, orient="vertical",   command=self.tree.yview)
         hsb = ttk.Scrollbar(list_frame, orient="horizontal", command=self.tree.xview)
@@ -594,13 +623,15 @@ class FileCleanerApp(tk.Tk):
         self.tree.bind("<Leave>", self._on_tree_leave)
         self.path_tooltip = Tooltip(self.tree)
         self._tooltip_row = None
+        self._hover_row = None
         self.tree.tag_configure("folder", foreground=COLORS["warning"])
         self.tree.tag_configure("file",   foreground=COLORS["text"])
-        self.tree.tag_configure("alt",    background=COLORS["row_alt"])
+        self.tree.tag_configure("hover", background=COLORS["row_hover"])
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    def _btn(self, parent, text, cmd, bg=None, fg=None, padx=14, width=None):
+    def _btn(self, parent, text, cmd, bg=None, fg=None, padx=14, width=None,
+             hover_bg=None, border_bg=None, border_width=0):
         bg = bg or COLORS["accent"]
         fg = fg or "white"
         return FlatButton(
@@ -609,12 +640,60 @@ class FileCleanerApp(tk.Tk):
             command=cmd,
             bg=bg,
             fg=fg,
-            hover_bg=self._lighten(bg),
+            hover_bg=hover_bg or self._lighten(bg),
             font=("Helvetica", 11, "bold"),
             padx=padx,
             pady=7,
             width=width,
+            border_bg=border_bg,
+            border_width=border_width,
         )
+
+    def _scrollbar(self, parent, command):
+        return tk.Scrollbar(
+            parent,
+            orient="vertical",
+            command=command,
+            width=12,
+            bg=COLORS["card"],
+            activebackground=COLORS["accent"],
+            troughcolor=COLORS["panel"],
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+        )
+
+    def _bind_canvas_scroll(self, canvas, *widgets):
+        def _on_mousewheel(event):
+            if event.num == 4:
+                delta = -1
+            elif event.num == 5:
+                delta = 1
+            else:
+                delta = -1 * int(event.delta / 120) if event.delta else 0
+            if delta:
+                canvas.yview_scroll(delta, "units")
+            return "break"
+
+        def bind_widget(widget):
+            widget.bind("<Button-4>", _on_mousewheel)
+            widget.bind("<Button-5>", _on_mousewheel)
+            widget.bind("<MouseWheel>", _on_mousewheel)
+            widget.bind("<Shift-MouseWheel>", _on_mousewheel)
+
+        bind_widget(canvas)
+        for widget in widgets:
+            bind_widget(widget)
+
+    def _refresh_canvas_scroll(self, canvas, content):
+        def bind_descendants(widget):
+            self._bind_canvas_scroll(canvas, widget)
+            for child in widget.winfo_children():
+                bind_descendants(child)
+
+        bind_descendants(content)
+        content.update_idletasks()
+        canvas.configure(scrollregion=canvas.bbox("all"))
 
     def _lighten(self, hex_color):
         mapping = {
@@ -639,11 +718,30 @@ class FileCleanerApp(tk.Tk):
             return
 
         path = self.path_var.get().strip()
-        self.path_display_var.set(path if path else "No folder selected")
+        self.path_display_var.set(self._display_scan_path(path) if path else "No folder selected")
 
     def _resize_path_display(self, event):
         if hasattr(self, "path_display_label"):
             self.path_display_label.config(wraplength=max(140, event.width - 22))
+
+    def _display_scan_path(self, path):
+        path = str(path)
+        max_chars = 96
+        if len(path) <= max_chars:
+            return path
+        head = path[:38]
+        tail = path[-(max_chars - len(head) - 3):]
+        return f"{head}...{tail}"
+
+    def _show_path_tooltip(self, event):
+        path = self.path_var.get().strip()
+        if not path or not hasattr(self, "path_display_tooltip"):
+            return
+        self.path_display_tooltip.show(path, event.x_root + 12, event.y_root + 16)
+
+    def _hide_path_display_tooltip(self):
+        if hasattr(self, "path_display_tooltip"):
+            self.path_display_tooltip.hide()
 
     def _save_path(self, path: str):
         paths = save_recent_path(self.config_data, path)
@@ -725,6 +823,7 @@ class FileCleanerApp(tk.Tk):
                 fg=COLORS["text_muted"],
                 font=("Helvetica", 9),
             ).pack(anchor="w", pady=(2, 0))
+            self._refresh_canvas_scroll(self.exclude_canvas, self.exclude_list_frame)
             return
 
         for idx, pattern in enumerate(patterns):
@@ -751,6 +850,8 @@ class FileCleanerApp(tk.Tk):
             del_btn.bind("<Enter>", lambda e, w=del_btn: w.config(fg=COLORS["danger"]))
             del_btn.bind("<Leave>", lambda e, w=del_btn: w.config(fg=COLORS["text_muted"]))
 
+        self._refresh_canvas_scroll(self.exclude_canvas, self.exclude_list_frame)
+
     def _add_exclude_pattern(self):
         raw = self.exclude_input_var.get().strip() if hasattr(self, "exclude_input_var") else ""
         patterns_to_add = normalize_pattern_list(raw)
@@ -775,20 +876,32 @@ class FileCleanerApp(tk.Tk):
         else:
             self.status_var.set("Exclude path already exists")
 
-    def _add_exclude_path(self):
-        initial = self.path_var.get().strip() or str(Path.home())
-        folder = filedialog.askdirectory(initialdir=initial, title="Select path to exclude")
-        if not folder:
+    def _append_exclude_pattern(self, pattern, status="Exclude target added"):
+        pattern = str(pattern).strip()
+        if not pattern:
             return
 
         patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
-        normalized_folder = folder.replace("\\", "/")
+        normalized_pattern = pattern.replace("\\", "/")
         existing = {p.replace("\\", "/") for p in patterns}
-        if normalized_folder not in existing:
-            patterns.append(folder)
-            self._set_exclude_patterns(patterns, "Exclude path added")
-        else:
-            self.status_var.set("Exclude path already exists")
+        if normalized_pattern in existing:
+            self.status_var.set("Exclude target already exists")
+            return
+
+        patterns.append(pattern)
+        self._set_exclude_patterns(patterns, status)
+
+    def _add_exclude_file(self):
+        initial = self.path_var.get().strip() or str(Path.home())
+        path = filedialog.askopenfilename(title="Select file to exclude", initialdir=initial)
+        if path:
+            self._append_exclude_pattern(path, "Exclude file added")
+
+    def _add_exclude_path(self):
+        initial = self.path_var.get().strip() or str(Path.home())
+        folder = filedialog.askdirectory(initialdir=initial, title="Select path to exclude")
+        if folder:
+            self._append_exclude_pattern(folder, "Exclude path added")
 
     def _remove_exclude_pattern(self, idx):
         patterns = normalize_pattern_list(self.config_data.get("exclude_patterns", []))
@@ -1243,8 +1356,6 @@ class FileCleanerApp(tk.Tk):
             self.result_vars.append(tk.BooleanVar(value=True))
 
             tags = (result["kind"],)
-            if idx % 2 == 1:
-                tags = tags + ("alt",)
 
             self.tree.insert(
                 "",
@@ -1255,7 +1366,7 @@ class FileCleanerApp(tk.Tk):
                     "☑",
                     result["kind"],
                     result["name"],
-                    result["path"],
+                    self._display_path(result["path"]),
                     fmt_size(result["size"]),
                     fmt_modified(result.get("modified", 0)),
                 ),
@@ -1296,11 +1407,9 @@ class FileCleanerApp(tk.Tk):
         for i, r in enumerate(self.scan_results):
             selected = self.result_vars[i].get() if i < len(self.result_vars) else True
             tags = (r["kind"],)
-            if i % 2 == 1:
-                tags = tags + ("alt",)
             self.tree.insert("", "end", iid=str(i), tags=tags,
                              values=("☑" if selected else "☐",
-                                     r["kind"], r["name"], r["path"],
+                                     r["kind"], r["name"], self._display_path(r["path"]),
                                      fmt_size(r["size"]), fmt_modified(r.get("modified", 0))))
 
         self._ignore_tree_select = False
@@ -1390,6 +1499,7 @@ class FileCleanerApp(tk.Tk):
     def _on_tree_motion(self, event):
         row_id = self.tree.identify_row(event.y)
         col = self.tree.identify_column(event.x)
+        self._set_hover_row(row_id)
         if col != "#4" or not row_id:
             self._hide_path_tooltip()
             return
@@ -1414,11 +1524,33 @@ class FileCleanerApp(tk.Tk):
 
     def _on_tree_leave(self, _event):
         self._hide_path_tooltip()
+        self._set_hover_row("")
 
     def _hide_path_tooltip(self):
         self._tooltip_row = None
         if hasattr(self, "path_tooltip"):
             self.path_tooltip.hide()
+
+    def _set_hover_row(self, row_id):
+        if row_id == self._hover_row:
+            return
+        if self._hover_row and self.tree.exists(self._hover_row):
+            tags = tuple(t for t in self.tree.item(self._hover_row, "tags") if t != "hover")
+            self.tree.item(self._hover_row, tags=tags)
+        self._hover_row = row_id
+        if row_id and self.tree.exists(row_id):
+            tags = tuple(self.tree.item(row_id, "tags"))
+            if "hover" not in tags:
+                self.tree.item(row_id, tags=tags + ("hover",))
+
+    def _display_path(self, path):
+        path = str(path)
+        max_chars = 64
+        if len(path) <= max_chars:
+            return path
+        head = path[:22]
+        tail = path[-(max_chars - len(head) - 3):]
+        return f"{head}...{tail}"
 
     def _select_all(self):
         self._ignore_tree_select = True

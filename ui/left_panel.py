@@ -15,7 +15,7 @@ def target_risk(target: dict) -> tuple:
     }
 
     if pattern in high_risk or (kind == "folder" and pattern.startswith(".git")):
-        return ("HIGH", COLORS["danger"])
+        return ("HIGH", COLORS["high_risk"])
     if pattern in medium_risk or pattern.endswith(".egg-info"):
-        return ("MED", COLORS["warning"])
-    return ("LOW", COLORS["success"])
+        return ("MED", COLORS["med_risk"])
+    return ("LOW", COLORS["low_risk"])
