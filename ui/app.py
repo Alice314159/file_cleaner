@@ -621,6 +621,7 @@ class FileCleanerApp(tk.Tk):
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Motion>", self._on_tree_motion)
         self.tree.bind("<Leave>", self._on_tree_leave)
+        self._bind_widget_scroll(self.tree, self.tree)
         self.path_tooltip = Tooltip(self.tree)
         self._tooltip_row = None
         self._hover_row = None
@@ -664,26 +665,37 @@ class FileCleanerApp(tk.Tk):
         )
 
     def _bind_canvas_scroll(self, canvas, *widgets):
+        self._bind_widget_scroll(canvas, canvas)
+        for widget in widgets:
+            self._bind_widget_scroll(widget, canvas)
+
+    def _bind_widget_scroll(self, widget, scroll_target):
         def _on_mousewheel(event):
-            if event.num == 4:
-                delta = -1
-            elif event.num == 5:
-                delta = 1
-            else:
-                delta = -1 * int(event.delta / 120) if event.delta else 0
-            if delta:
-                canvas.yview_scroll(delta, "units")
+            units = self._scroll_units(event)
+            if units:
+                scroll_target.yview_scroll(units, "units")
             return "break"
 
-        def bind_widget(widget):
-            widget.bind("<Button-4>", _on_mousewheel)
-            widget.bind("<Button-5>", _on_mousewheel)
-            widget.bind("<MouseWheel>", _on_mousewheel)
-            widget.bind("<Shift-MouseWheel>", _on_mousewheel)
+        widget.bind("<Button-4>", _on_mousewheel)
+        widget.bind("<Button-5>", _on_mousewheel)
+        widget.bind("<MouseWheel>", _on_mousewheel)
+        widget.bind("<Shift-MouseWheel>", _on_mousewheel)
 
-        bind_widget(canvas)
-        for widget in widgets:
-            bind_widget(widget)
+    def _scroll_units(self, event):
+        if getattr(event, "num", None) == 4:
+            return -1
+        if getattr(event, "num", None) == 5:
+            return 1
+
+        delta = getattr(event, "delta", 0)
+        if not delta:
+            return 0
+
+        # Windows commonly reports +/-120. macOS often reports small deltas
+        # such as +/-1, which int(delta / 120) would collapse to zero.
+        if abs(delta) >= 120:
+            return -int(delta / 120)
+        return -1 if delta > 0 else 1
 
     def _refresh_canvas_scroll(self, canvas, content):
         def bind_descendants(widget):
