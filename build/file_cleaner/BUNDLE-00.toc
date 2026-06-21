@@ -1,0 +1,3 @@
+([('FileCleaner',
+   '/Users/alice/Documents/01_code/tools/cleanDir/file_cleaner/dist/FileCleaner',
+   'EXECUTABLE')],)
